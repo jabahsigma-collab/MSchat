@@ -12,47 +12,30 @@
       box-sizing: border-box;
     }
     body {
-      margin: 0;
-      padding: 0;
+      margin: 0; padding: 0;
       font-family: Arial, sans-serif;
       background: #2f2f2f;
       color: white;
     }
     .container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-height: 100vh;
-      padding-bottom: 60px;
+      max-width: 400px;
+      margin: auto;
+      padding: 10px;
     }
-    .auth,
-    .chat,
-    .chat-screen,
-    .settings-panel {
-      background: #3a3a3a;
-      border-radius: 20px;
-      padding: 20px;
-      width: 90%;
-      max-width: 350px;
-      margin-top: 20px;
-      box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
-    }
-    input,
-    button {
+    input, button {
       width: 100%;
       padding: 10px;
-      border: none;
-      outline: none;
+      margin: 6px 0;
       border-radius: 12px;
+      border: none;
       font-size: 16px;
-      margin: 8px 0;
     }
     input {
       background: #555;
-      color: #fff;
+      color: white;
     }
     button {
-      background: #fff;
+      background: white;
       color: #2f2f2f;
       font-weight: bold;
       cursor: pointer;
@@ -61,37 +44,32 @@
     button:hover {
       background: #ddd;
     }
-    .bottom-nav {
-      position: fixed;
-      bottom: 0;
-      width: 100%;
-      background: #3a3a3a;
-      display: flex;
-      justify-content: space-around;
-      padding: 10px 0;
-      border-top: 1px solid #555;
-    }
-    .bottom-nav button {
-      flex: 1;
-      margin: 0 5px;
-      border-radius: 10px;
-    }
-    .user-result {
+    #userList .user-result {
       background: #444;
-      margin: 10px 0;
-      padding: 10px;
+      padding: 8px;
+      margin: 6px 0;
       border-radius: 12px;
       cursor: pointer;
-      transition: 0.3s;
+      transition: background 0.3s;
     }
-    .user-result:hover {
+    #userList .user-result:hover {
       background: #555;
+    }
+    #chatBox {
+      height: 200px;
+      overflow-y: auto;
+      background: #2f2f2f;
+      padding: 10px;
+      border-radius: 12px;
+      margin-bottom: 10px;
+      border: 1px solid #444;
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <div id="auth" class="auth">
+
+    <div id="auth">
       <h3>Регистрация / Вход</h3>
       <input id="username" type="text" placeholder="Юзернейм" />
       <input id="password" type="password" placeholder="Пароль" />
@@ -99,169 +77,198 @@
       <button onclick="login()">Войти</button>
     </div>
 
-    <div id="chat" class="chat" style="display:none">
+    <div id="chat" style="display:none;">
       <h3>Найти пользователя</h3>
       <input id="search" type="text" placeholder="Введите юзернейм" />
       <button onclick="searchUsers()">Найти</button>
       <div id="userList"></div>
     </div>
 
-    <div id="chatScreen" class="chat-screen" style="display:none">
+    <div id="chatScreen" style="display:none;">
       <h3 id="chatWithTitle"></h3>
-      <div id="chatBox" style="height: 200px; overflow-y: auto; background: #2f2f2f; padding: 10px; border-radius: 10px; margin-bottom: 10px;"></div>
+      <div id="chatBox"></div>
       <input id="msgInput" type="text" placeholder="Сообщение..." />
       <button onclick="sendMessage()">Отправить</button>
+      <button onclick="backToSearch()">Назад</button>
     </div>
 
-    <div id="settingsPanel" class="settings-panel">
-      <h3>Настройки</h3>
-      <button onclick="changeUsername()">Сменить юзернейм</button>
-    </div>
   </div>
 
-  <div class="bottom-nav" id="bottomNav" style="display: none">
-    <button onclick="openChatSearch()">Чат</button>
-    <button onclick="toggleSettings()">Настройки</button>
-  </div>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
+  import {
+    getAuth,
+    createUserWithEmailAndPassword,
+    signInWithEmailAndPassword,
+    onAuthStateChanged
+  } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js";
+  import {
+    getDatabase,
+    ref,
+    set,
+    get,
+    push,
+    onChildAdded
+  } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
-    import {
-      getAuth,
-      createUserWithEmailAndPassword,
-      signInWithEmailAndPassword,
-      onAuthStateChanged,
-      signOut
-    } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js";
-    import {
-      getDatabase,
-      ref,
-      set,
-      get,
-      remove,
-      onChildAdded,
-      push
-    } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
+  // Firebase config (твоя конфигурация)
+  const firebaseConfig = {
+    apiKey: "AIzaSyBfKFTaffEQ5nQzFOCppjpHvVANdr2w5CA",
+    authDomain: "mschat-2f609.firebaseapp.com",
+    databaseURL: "https://mschat-2f609-default-rtdb.firebaseio.com",
+    projectId: "mschat-2f609",
+    storageBucket: "mschat-2f609.appspot.com",
+    messagingSenderId: "406932138595",
+    appId: "1:406932138595:web:89612234df4c519b98e656"
+  };
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyBfKFTaffEQ5nQzFOCppjpHvVANdr2w5CA",
-      authDomain: "mschat-2f609.firebaseapp.com",
-      databaseURL: "https://mschat-2f609-default-rtdb.firebaseio.com",
-      projectId: "mschat-2f609",
-      storageBucket: "mschat-2f609.appspot.com",
-      messagingSenderId: "406932138595",
-      appId: "1:406932138595:web:89612234df4c519b98e656"
-    };
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth();
+  const db = getDatabase();
 
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth();
-    const db = getDatabase();
+  let currentUsername = null;
+  let currentChatUser = null;
 
-    let currentUsername = null;
-    let currentChatUser = null;
+  function normalizeUsername(name) {
+    return name.trim().toLowerCase();
+  }
 
-    onAuthStateChanged(auth, user => {
-      if (user) {
-        currentUsername = user.email.split('@')[0];
-        document.getElementById("auth").style.display = "none";
-        document.getElementById("chat").style.display = "block";
-        document.getElementById("bottomNav").style.display = "flex";
+  window.register = async function() {
+    const usernameInput = document.getElementById('username');
+    const passwordInput = document.getElementById('password');
+    const usernameOriginal = usernameInput.value.trim();
+    if (!usernameOriginal) return alert("Введите юзернейм");
+    const username = normalizeUsername(usernameOriginal);
+    const password = passwordInput.value;
+
+    try {
+      // Проверяем занятость ника
+      const userSnap = await get(ref(db, 'users/' + username));
+      if(userSnap.exists()) {
+        alert("Юзернейм уже занят");
+        return;
       }
-    });
-
-    window.register = function () {
-      const username = document.getElementById("username").value.trim();
-      const password = document.getElementById("password").value;
-      createUserWithEmailAndPassword(auth, `${username}@mail.com`, password)
-        .then(() => {
-          currentUsername = username;
-          return set(ref(db, `users/${username}`), { avatar: "default" });
-        })
-        .catch(alert);
-    };
-
-    window.login = function () {
-      const username = document.getElementById("username").value.trim();
-      const password = document.getElementById("password").value;
-      signInWithEmailAndPassword(auth, `${username}@mail.com`, password)
-        .catch(alert);
-    };
-
-    window.searchUsers = function () {
-      const q = document.getElementById("search").value.trim().toLowerCase();
-      const listDiv = document.getElementById("userList");
-      listDiv.innerHTML = "Ищем...";
-      get(ref(db, 'users')).then(snap => {
-        listDiv.innerHTML = '';
-        let found = false;
-        snap.forEach(child => {
-          const key = child.key;
-          if (key.toLowerCase().includes(q) && key !== currentUsername) {
-            found = true;
-            const div = document.createElement("div");
-            div.className = "user-result";
-            div.innerText = key;
-            div.onclick = () => openChatWith(key);
-            listDiv.appendChild(div);
-          }
-        });
-        if (!found) listDiv.innerHTML = "Нет такого пользователя";
-      });
-    };
-
-    function openChatWith(username) {
-      currentChatUser = username;
-      document.getElementById("chat").style.display = "none";
-      document.getElementById("chatScreen").style.display = "block";
-      document.getElementById("chatWithTitle").innerText = `Чат с ${username}`;
-      const chatBox = document.getElementById("chatBox");
-      chatBox.innerHTML = "";
-      const path = `chats/${[currentUsername, username].sort().join('_')}`;
-      onChildAdded(ref(db, path), snap => {
-        const msg = snap.val();
-        const div = document.createElement("div");
-        div.innerText = `${msg.from}: ${msg.text}`;
-        chatBox.appendChild(div);
-        chatBox.scrollTop = chatBox.scrollHeight;
-      });
+      // Создаём аккаунт Firebase с почтой username@mail.com
+      await createUserWithEmailAndPassword(auth, username + "@mail.com", password);
+      // Сохраняем юзернейм с оригиналом регистра
+      await set(ref(db, 'users/' + username), { original: usernameOriginal });
+      currentUsername = username;
+      showChat();
+    } catch(e) {
+      alert(e.message);
     }
+  };
 
-    window.sendMessage = function () {
-      const text = document.getElementById("msgInput").value;
-      const path = `chats/${[currentUsername, currentChatUser].sort().join('_')}`;
-      push(ref(db, path), { from: currentUsername, text });
-      document.getElementById("msgInput").value = "";
-    };
+  window.login = async function() {
+    const usernameInput = document.getElementById('username');
+    const passwordInput = document.getElementById('password');
+    const usernameOriginal = usernameInput.value.trim();
+    if (!usernameOriginal) return alert("Введите юзернейм");
+    const username = normalizeUsername(usernameOriginal);
+    const password = passwordInput.value;
 
-    window.openChatSearch = function () {
-      document.getElementById("chat").style.display = "block";
-      document.getElementById("chatScreen").style.display = "none";
-      document.getElementById("settingsPanel").style.display = "none";
-    };
+    try {
+      await signInWithEmailAndPassword(auth, username + "@mail.com", password);
+      currentUsername = username;
+      showChat();
+    } catch(e) {
+      alert(e.message);
+    }
+  };
 
-    window.toggleSettings = function () {
-      const panel = document.getElementById("settingsPanel");
-      panel.classList.toggle("show");
-      document.getElementById("chat").style.display = "none";
-      document.getElementById("chatScreen").style.display = "none";
-    };
+  onAuthStateChanged(auth, user => {
+    if(user) {
+      const email = user.email;
+      currentUsername = email.split('@')[0];
+      showChat();
+    } else {
+      currentUsername = null;
+      document.getElementById('auth').style.display = 'block';
+      document.getElementById('chat').style.display = 'none';
+      document.getElementById('chatScreen').style.display = 'none';
+    }
+  });
 
-    window.changeUsername = function () {
-      const newUsername = prompt("Новый юзернейм:").trim();
-      if (!newUsername) return;
-      get(ref(db, `users/${newUsername}`)).then(snap => {
-        if (snap.exists()) {
-          alert("Имя уже занято.");
-        } else {
-          set(ref(db, `users/${newUsername}`), { avatar: "default" })
-            .then(() => remove(ref(db, `users/${currentUsername}`)))
-            .then(() => {
-              currentUsername = newUsername;
-              alert("Юзернейм изменён.");
-            });
+  window.searchUsers = async function() {
+    const qInput = document.getElementById('search');
+    const q = normalizeUsername(qInput.value);
+    if(!q) return alert("Введите ник для поиска");
+    const userListDiv = document.getElementById('userList');
+    userListDiv.innerHTML = "Ищем...";
+    try {
+      const snap = await get(ref(db, 'users'));
+      userListDiv.innerHTML = "";
+      let found = false;
+      snap.forEach(childSnap => {
+        const key = childSnap.key;
+        const userData = childSnap.val();
+        if(key.includes(q) && key !== currentUsername) {
+          found = true;
+          const div = document.createElement("div");
+          div.className = "user-result";
+          div.textContent = userData.original || key;
+          div.onclick = () => openChatWith(key, div.textContent);
+          userListDiv.appendChild(div);
         }
       });
-    };
-  </script>
+      if(!found) {
+        userListDiv.innerHTML = "Нет такого пользователя";
+      }
+    } catch(e) {
+      alert(e.message);
+    }
+  };
+
+  function openChatWith(username, displayName) {
+    currentChatUser = username;
+    document.getElementById('chat').style.display = 'none';
+    document.getElementById('chatScreen').style.display = 'block';
+    document.getElementById('chatWithTitle').textContent = 'Чат с ' + displayName;
+
+    const chatBox = document.getElementById('chatBox');
+    chatBox.innerHTML = "";
+
+    const chatPath = 'chats/' + [currentUsername, username].sort().join('_');
+
+    // Отписываемся от предыдущих слушателей (если есть)
+    if(window.chatListener) window.chatListener();
+
+    // Подписываемся на новые сообщения
+    window.chatListener = onChildAdded(ref(db, chatPath), snap => {
+      const msg = snap.val();
+      const div = document.createElement('div');
+      div.textContent = (msg.from === currentUsername ? 'Я' : displayName) + ': ' + msg.text;
+      chatBox.appendChild(div);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    });
+  }
+
+  window.sendMessage = async function() {
+    const msgInput = document.getElementById('msgInput');
+    const text = msgInput.value.trim();
+    if(!text) return;
+    const chatPath = 'chats/' + [currentUsername, currentChatUser].sort().join('_');
+    try {
+      await push(ref(db, chatPath), { from: currentUsername, text });
+      msgInput.value = '';
+    } catch(e) {
+      alert(e.message);
+    }
+  };
+
+  function showChat() {
+    document.getElementById('auth').style.display = 'none';
+    document.getElementById('chat').style.display = 'block';
+    document.getElementById('chatScreen').style.display = 'none';
+  }
+
+  window.backToSearch = function() {
+    document.getElementById('chat').style.display = 'block';
+    document.getElementById('chatScreen').style.display = 'none';
+    currentChatUser = null;
+    // Отписываемся от слушателя чата
+    if(window.chatListener) window.chatListener();
+  };
+</script>
 </body>
 </html>
