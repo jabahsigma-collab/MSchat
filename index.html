@@ -8,14 +8,15 @@
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js"></script>
   <style>
-    * {
-      box-sizing: border-box;
-    }
+    * {box-sizing: border-box;}
     body {
       margin: 0; padding: 0;
       font-family: Arial, sans-serif;
       background: #2f2f2f;
       color: white;
+      min-height: 100vh;
+      position: relative;
+      padding-bottom: 70px; /* space for bottom nav */
     }
     .container {
       max-width: 400px;
@@ -64,6 +65,34 @@
       margin-bottom: 10px;
       border: 1px solid #444;
     }
+    .bottom-nav {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: #3a3a3a;
+      display: flex;
+      justify-content: space-around;
+      padding: 10px 0;
+      border-top: 1px solid #555;
+    }
+    .bottom-nav button {
+      flex: 1;
+      margin: 0 10px;
+      border-radius: 12px;
+      background: white;
+      color: #2f2f2f;
+      font-weight: bold;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    .bottom-nav button:hover {
+      background: #ddd;
+    }
+    #settings {
+      max-width: 400px;
+      margin: auto;
+      padding: 10px;
+      color: white;
+    }
   </style>
 </head>
 <body>
@@ -92,6 +121,17 @@
       <button onclick="backToSearch()">Назад</button>
     </div>
 
+    <div id="settings" style="display:none;">
+      <h3>Настройки</h3>
+      <button onclick="changeUsername()">Сменить юзернейм</button>
+      <button onclick="logout()">Выйти</button>
+    </div>
+
+  </div>
+
+  <div class="bottom-nav" style="display:none;">
+    <button onclick="openChat()">Чат</button>
+    <button onclick="openSettings()">Настройки</button>
   </div>
 
 <script type="module">
@@ -100,7 +140,8 @@
     getAuth,
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
-    onAuthStateChanged
+    onAuthStateChanged,
+    signOut
   } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js";
   import {
     getDatabase,
@@ -111,7 +152,6 @@
     onChildAdded
   } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
 
-  // Firebase config (твоя конфигурация)
   const firebaseConfig = {
     apiKey: "AIzaSyBfKFTaffEQ5nQzFOCppjpHvVANdr2w5CA",
     authDomain: "mschat-2f609.firebaseapp.com",
@@ -128,10 +168,38 @@
 
   let currentUsername = null;
   let currentChatUser = null;
+  let chatListener = null;
 
   function normalizeUsername(name) {
     return name.trim().toLowerCase();
   }
+
+  function showAuth() {
+    document.getElementById('auth').style.display = 'block';
+    document.getElementById('chat').style.display = 'none';
+    document.getElementById('chatScreen').style.display = 'none';
+    document.getElementById('settings').style.display = 'none';
+    document.querySelector('.bottom-nav').style.display = 'none';
+  }
+
+  function showChat() {
+    document.getElementById('auth').style.display = 'none';
+    document.getElementById('chat').style.display = 'block';
+    document.getElementById('chatScreen').style.display = 'none';
+    document.getElementById('settings').style.display = 'none';
+    document.querySelector('.bottom-nav').style.display = 'flex';
+  }
+
+  onAuthStateChanged(auth, user => {
+    if(user) {
+      const email = user.email;
+      currentUsername = email.split('@')[0];
+      showChat();
+    } else {
+      currentUsername = null;
+      showAuth();
+    }
+  });
 
   window.register = async function() {
     const usernameInput = document.getElementById('username');
@@ -142,15 +210,12 @@
     const password = passwordInput.value;
 
     try {
-      // Проверяем занятость ника
       const userSnap = await get(ref(db, 'users/' + username));
       if(userSnap.exists()) {
         alert("Юзернейм уже занят");
         return;
       }
-      // Создаём аккаунт Firebase с почтой username@mail.com
       await createUserWithEmailAndPassword(auth, username + "@mail.com", password);
-      // Сохраняем юзернейм с оригиналом регистра
       await set(ref(db, 'users/' + username), { original: usernameOriginal });
       currentUsername = username;
       showChat();
@@ -175,19 +240,6 @@
       alert(e.message);
     }
   };
-
-  onAuthStateChanged(auth, user => {
-    if(user) {
-      const email = user.email;
-      currentUsername = email.split('@')[0];
-      showChat();
-    } else {
-      currentUsername = null;
-      document.getElementById('auth').style.display = 'block';
-      document.getElementById('chat').style.display = 'none';
-      document.getElementById('chatScreen').style.display = 'none';
-    }
-  });
 
   window.searchUsers = async function() {
     const qInput = document.getElementById('search');
@@ -223,21 +275,32 @@
     currentChatUser = username;
     document.getElementById('chat').style.display = 'none';
     document.getElementById('chatScreen').style.display = 'block';
+    document.getElementById('settings').style.display = 'none';
     document.getElementById('chatWithTitle').textContent = 'Чат с ' + displayName;
 
     const chatBox = document.getElementById('chatBox');
     chatBox.innerHTML = "";
 
-    const chatPath = 'chats/' + [currentUsername, username].sort().join('_');
+    const chatPath = 'chats/' + [currentUsername, currentChatUser].sort().join('_');
+    if(chatListener) chatListener(); // отменяем предыдущий слушатель
 
-    // Отписываемся от предыдущих слушателей (если есть)
-    if(window.chatListener) window.chatListener();
-
-    // Подписываемся на новые сообщения
-    window.chatListener = onChildAdded(ref(db, chatPath), snap => {
-      const msg = snap.val();
+    const chatRef = ref(db, chatPath);
+    chatListener = onChildAdded(chatRef, snapshot => {
+      const msg = snapshot.val();
       const div = document.createElement('div');
-      div.textContent = (msg.from === currentUsername ? 'Я' : displayName) + ': ' + msg.text;
+      div.style.marginBottom = "8px";
+      div.style.padding = "6px";
+      div.style.borderRadius = "8px";
+      if(msg.sender === currentUsername) {
+        div.style.background = "#4caf50";
+        div.style.color = "white";
+        div.style.textAlign = "right";
+      } else {
+        div.style.background = "#2196f3";
+        div.style.color = "white";
+        div.style.textAlign = "left";
+      }
+      div.textContent = msg.text;
       chatBox.appendChild(div);
       chatBox.scrollTop = chatBox.scrollHeight;
     });
@@ -248,27 +311,59 @@
     const text = msgInput.value.trim();
     if(!text) return;
     const chatPath = 'chats/' + [currentUsername, currentChatUser].sort().join('_');
-    try {
-      await push(ref(db, chatPath), { from: currentUsername, text });
-      msgInput.value = '';
-    } catch(e) {
-      alert(e.message);
-    }
+    const chatRef = ref(db, chatPath);
+    await push(chatRef, { sender: currentUsername, text: text, timestamp: Date.now() });
+    msgInput.value = "";
   };
-
-  function showChat() {
-    document.getElementById('auth').style.display = 'none';
-    document.getElementById('chat').style.display = 'block';
-    document.getElementById('chatScreen').style.display = 'none';
-  }
 
   window.backToSearch = function() {
+    document.getElementById('chatScreen').style.display = 'none';
+    document.getElementById('chat').style.display = 'block';
+    currentChatUser = null;
+    if(chatListener) chatListener();
+  };
+
+  window.openChat = function() {
     document.getElementById('chat').style.display = 'block';
     document.getElementById('chatScreen').style.display = 'none';
-    currentChatUser = null;
-    // Отписываемся от слушателя чата
-    if(window.chatListener) window.chatListener();
+    document.getElementById('settings').style.display = 'none';
   };
+
+  window.openSettings = function() {
+    document.getElementById('chat').style.display = 'none';
+    document.getElementById('chatScreen').style.display = 'none';
+    document.getElementById('settings').style.display = 'block';
+  };
+
+  window.changeUsername = async function() {
+    const newUsernameOriginal = prompt("Введите новый юзернейм:");
+    if(!newUsernameOriginal) return;
+    const newUsername = normalizeUsername(newUsernameOriginal);
+    if(newUsername === currentUsername) {
+      alert("Это ваш текущий ник");
+      return;
+    }
+    // Проверка занятости
+    const snap = await get(ref(db, 'users/' + newUsername));
+    if(snap.exists()) {
+      alert("Юзернейм уже занят");
+      return;
+    }
+    // Создаем новую запись
+    await set(ref(db, 'users/' + newUsername), { original: newUsernameOriginal });
+    // Удаляем старую
+    await set(ref(db, 'users/' + currentUsername), null);
+    alert("Юзернейм изменён, нужно заново войти.");
+    await logout();
+  };
+
+  window.logout = async function() {
+    await signOut(auth);
+    currentUsername = null;
+    currentChatUser = null;
+    showAuth();
+  };
+
 </script>
 </body>
 </html>
