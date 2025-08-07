@@ -1,207 +1,255 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>MS Chat</title>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js"></script>
   <style>
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+    }
     body {
-      margin: 0; padding: 0;
+      margin: 0;
+      padding: 0;
       font-family: Arial, sans-serif;
-      display: flex; flex-direction: column;
-      align-items: center;
-      background: #2f2f2f; height: 100vh;
+      background: #2f2f2f;
       color: white;
     }
-    .auth, .chat {
-      background: #3a3a3a;
-      border-radius: 20px; padding: 20px;
-      width: 90%; max-width: 350px;
-      margin-top: 20px;
-      box-shadow: 0 0 15px rgba(0,0,0,0.5);
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding-bottom: 60px;
     }
-    input, button {
-      width: 100%; padding: 10px;
-      border: none; outline: none;
-      border-radius: 12px; font-size: 16px;
+    .auth,
+    .chat,
+    .chat-screen,
+    .settings-panel {
+      background: #3a3a3a;
+      border-radius: 20px;
+      padding: 20px;
+      width: 90%;
+      max-width: 350px;
+      margin-top: 20px;
+      box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+    }
+    input,
+    button {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      outline: none;
+      border-radius: 20px;
+      font-size: 16px;
       margin: 8px 0;
     }
-    input { background: #555; color: #fff; }
+    input {
+      background: #555;
+      color: #fff;
+    }
     button {
-      background: #fff; color: #2f2f2f;
-      font-weight: bold; cursor: pointer;
-      transition: .3s;
+      background: #fff;
+      color: #2f2f2f;
+      font-weight: bold;
+      cursor: pointer;
+      transition: 0.3s;
     }
-    button:hover { background: #ddd; }
-    .user-list { max-height: 150px; overflow-y: auto; margin: 10px 0; }
-    .user-item {
-      padding: 8px; background: #444;
-      margin-bottom: 5px; border-radius: 8px;
-      cursor: pointer; display: flex;
-      align-items: center;
+    button:hover {
+      background: #ddd;
     }
-    .user-item img {
-      width: 32px; height: 32px; border-radius: 50%; margin-right: 10px;
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      width: 100%;
+      background: #3a3a3a;
+      display: none;
+      justify-content: space-around;
+      padding: 10px 0;
+      border-top: 1px solid #555;
     }
-    .user-item:hover { background: #555; }
-    .messages {
-      background: #444; height: 200px;
-      overflow-y: auto; padding:10px;
-      border-radius: 12px;
-      margin-bottom: 10px;
-    }
-    .input-group {
+    .bottom-nav.show {
       display: flex;
-      align-items: center;
     }
-    .input-group input {
-      flex: 1; margin-right: 8px;
+    .bottom-nav button {
+      flex: 1;
+      margin: 0 5px;
+      border-radius: 10px;
     }
-    #noUserMsg {
-      text-align: center; padding: 10px; color: #aaa;
+    .settings-panel {
+      display: none;
+      transition: all 0.3s ease;
+    }
+    .settings-panel.show {
+      display: block;
+    }
+    #search {
+      border-radius: 50px;
+      padding-left: 20px;
+      font-size: 16px;
+      border: 2px solid #888;
+    }
+    #userList div {
+      background: #444;
+      border-radius: 15px;
+      padding: 10px;
+      margin-top: 10px;
     }
   </style>
 </head>
 <body>
+  <div class="container">
+    <div id="auth" class="auth">
+      <h3>Регистрация / Вход</h3>
+      <input id="username" type="text" placeholder="Юзернейм" />
+      <input id="password" type="password" placeholder="Пароль" />
+      <button onclick="register()">Зарегистрироваться</button>
+      <button onclick="login()">Войти</button>
+    </div>
 
-<div id="auth" class="auth">
-  <h3>Регистрация / Вход</h3>
-  <input id="username" type="text" placeholder="Юзернейм" />
-  <input id="password" type="password" placeholder="Пароль" />
-  <button onclick="register()">Зарегистрироваться</button>
-  <button onclick="login()">Войти</button>
-</div>
+    <div id="chat" class="chat" style="display:none">
+      <h3>Найти пользователя</h3>
+      <input id="search" type="text" placeholder="Поиск" />
+      <button onclick="searchUsers()">Поиск</button>
+      <div id="userList"></div>
+      <div id="noUserMsg"></div>
+    </div>
 
-<div id="chat" class="chat" style="display:none">
-  <h3>Найти пользователя</h3>
-  <input id="search" type="text" placeholder="Поиск..." oninput="searchUsers()" />
-  <div id="userList" class="user-list"></div>
-  <div id="noUserMsg"></div>
-  <div id="chatBox" class="messages"></div>
-  <div class="input-group">
-    <input id="msgInput" type="text" placeholder="Сообщение..." />
-    <button onclick="sendMessage()">➤</button>
+    <div id="chatScreen" class="chat-screen" style="display:none">
+      <h3 id="chatWithTitle"></h3>
+      <div id="chatBox"></div>
+      <input id="msgInput" type="text" placeholder="Сообщение..." />
+      <button onclick="sendMessage()">Отправить</button>
+    </div>
+
+    <div id="settingsPanel" class="settings-panel">
+      <h3>Настройки</h3>
+      <button onclick="changeUsername()">Сменить юзернейм</button>
+    </div>
   </div>
-</div>
 
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
-  import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js";
-  import { getDatabase, ref, set, onValue, push, get, child } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
+  <div id="bottomNav" class="bottom-nav">
+    <button onclick="openChatSearch()">Чат</button>
+    <button onclick="toggleSettings()">Настройки</button>
+  </div>
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyBfKFTaffEQ5nQzFOCppjpHvVANdr2w5CA",
-    authDomain: "mschat-2f609.firebaseapp.com",
-    databaseURL: "https://mschat-2f609-default-rtdb.firebaseio.com",
-    projectId: "mschat-2f609",
-    storageBucket: "mschat-2f609.appspot.com",
-    messagingSenderId: "406932138595",
-    appId: "1:406932138595:web:89612234df4c519b98e656",
-    measurementId: "G-7KGY026CEQ"
-  };
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
+    import {
+      getAuth,
+      createUserWithEmailAndPassword,
+      signInWithEmailAndPassword
+    } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js";
+    import {
+      getDatabase,
+      ref,
+      set,
+      get,
+      child,
+      remove
+    } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
 
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const db = getDatabase(app);
+    const firebaseConfig = {
+      apiKey: "AIzaSyBfKFTaffEQ5nQzFOCppjpHvVANdr2w5CA",
+      authDomain: "mschat-2f609.firebaseapp.com",
+      databaseURL: "https://mschat-2f609-default-rtdb.firebaseio.com",
+      projectId: "mschat-2f609",
+      storageBucket: "mschat-2f609.appspot.com",
+      messagingSenderId: "406932138595",
+      appId: "1:406932138595:web:89612234df4c519b98e656"
+    };
 
-  let currentUser = null;
-  let chatWith = null;
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth();
+    const db = getDatabase();
+    let currentUsername = null;
 
-  window.register = function () {
-    const u = username.value.trim();
-    const p = password.value.trim();
-    createUserWithEmailAndPassword(auth, u + "@mail.com", p)
-      .then(() => {
-        currentUser = u;
-        set(ref(db, "users/" + u), { avatar: "https://i.ibb.co/ZYW3VTp/brown-brim.png" });
-        showChat();
-      }).catch(e => alert(e.message));
-  }
+    window.register = function () {
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value;
+      createUserWithEmailAndPassword(auth, `${username}@mail.com`, password)
+        .then(() => {
+          currentUsername = username;
+          return set(ref(db, `users/${username}`), { avatar: "default" });
+        })
+        .then(() => showChat())
+        .catch(alert);
+    };
 
-  window.login = function () {
-    const u = username.value.trim();
-    const p = password.value.trim();
-    signInWithEmailAndPassword(auth, u + "@mail.com", p)
-      .then(() => {
-        currentUser = u;
-        showChat();
-      }).catch(e => alert(e.message));
-  }
+    window.login = function () {
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value;
+      signInWithEmailAndPassword(auth, `${username}@mail.com`, password)
+        .then(() => {
+          currentUsername = username;
+          showChat();
+        })
+        .catch(alert);
+    };
 
-  function showChat() {
-    document.getElementById("auth").style.display = "none";
-    document.getElementById("chat").style.display = "block";
-    loadUsersList("");
-  }
+    window.searchUsers = function () {
+      const query = document.getElementById("search").value.trim().toLowerCase();
+      const userList = document.getElementById("userList");
+      const noUserMsg = document.getElementById("noUserMsg");
+      userList.innerHTML = "";
+      noUserMsg.innerText = "";
 
-  window.searchUsers = function () {
-    loadUsersList(document.getElementById("search").value.trim());
-  }
-
-  function loadUsersList(q) {
-    get(ref(db, "users")).then(snapshot => {
-      const ul = document.getElementById("userList");
-      const noMsg = document.getElementById("noUserMsg");
-      ul.innerHTML = "";
-      noMsg.textContent = "";
-      let found = false;
-
-      snapshot.forEach(child => {
-        const name = child.key;
-        const data = child.val();
-        if (name !== currentUser && name.includes(q)) {
-          found = true;
-          const div = document.createElement("div");
-          div.className = "user-item";
-          const img = document.createElement("img");
-          img.src = data.avatar || "https://i.ibb.co/ZYW3VTp/brown-brim.png";
-          const span = document.createElement("span");
-          span.textContent = name;
-          div.appendChild(img);
-          div.appendChild(span);
-          div.onclick = () => selectUser(name);
-          ul.appendChild(div);
+      get(ref(db, 'users')).then((snapshot) => {
+        let found = false;
+        snapshot.forEach((childSnap) => {
+          const uname = childSnap.key.toLowerCase();
+          if (uname.includes(query)) {
+            const div = document.createElement("div");
+            div.textContent = childSnap.key;
+            userList.appendChild(div);
+            found = true;
+          }
+        });
+        if (!found) {
+          noUserMsg.innerText = "Нет такого пользователя";
         }
       });
+    };
 
-      if (!found && q.length > 0) {
-        noMsg.textContent = "Нет пользователя с таким юзернеймом";
-      }
-    });
-  }
+    window.openChatSearch = function () {
+      document.getElementById("chat").style.display = "block";
+      document.getElementById("chatScreen").style.display = "none";
+      document.getElementById("settingsPanel").style.display = "none";
+    };
 
-  function selectUser(name) {
-    chatWith = name;
-    document.getElementById("chatBox").innerHTML = "";
-    const path = `chats/${currentUser}_${chatWith}`;
-    onValue(ref(db, path), snapshot => {
-      const cb = document.getElementById("chatBox");
-      cb.innerHTML = "";
-      snapshot.forEach(child => {
-        const msg = child.val();
-        const div = document.createElement("div");
-        div.textContent = `${msg.from}: ${msg.text}`;
-        cb.appendChild(div);
+    window.toggleSettings = function () {
+      const panel = document.getElementById("settingsPanel");
+      panel.classList.toggle("show");
+      document.getElementById("chat").style.display = "none";
+      document.getElementById("chatScreen").style.display = "none";
+    };
+
+    window.changeUsername = function () {
+      const newUsername = prompt("Новый юзернейм:").trim();
+      if (!newUsername) return;
+      get(ref(db, `users/${newUsername}`)).then((snap) => {
+        if (snap.exists()) {
+          alert("Имя уже занято.");
+        } else {
+          set(ref(db, `users/${newUsername}`), { avatar: "default" })
+            .then(() => remove(ref(db, `users/${currentUsername}`)))
+            .then(() => {
+              currentUsername = newUsername;
+              alert("Юзернейм изменён.");
+            });
+        }
       });
-      cb.scrollTop = cb.scrollHeight;
-    });
-  }
+    };
 
-  window.sendMessage = function () {
-    const text = document.getElementById("msgInput").value.trim();
-    if (!chatWith || !text) return;
-    const path1 = `chats/${currentUser}_${chatWith}`;
-    const path2 = `chats/${chatWith}_${currentUser}`;
-    const newMsg = { from: currentUser, text };
-    push(ref(db, path1), newMsg);
-    push(ref(db, path2), newMsg);
-    document.getElementById("msgInput").value = "";
-  }
-</script>
-
+    function showChat() {
+      document.getElementById("auth").style.display = "none";
+      document.getElementById("chat").style.display = "block";
+      document.getElementById("bottomNav").classList.add("show");
+    }
+  </script>
 </body>
-</html>
+  </html>
+  
